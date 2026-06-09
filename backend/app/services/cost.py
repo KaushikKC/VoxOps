@@ -43,7 +43,7 @@ def _sum_tokens(obj: object, key_substrings: tuple[str, ...]) -> int:
     total = 0
     if isinstance(obj, dict):
         for key, value in obj.items():
-            if isinstance(value, (int, float)) and any(s in key.lower() for s in key_substrings):
+            if isinstance(value, int | float) and any(s in key.lower() for s in key_substrings):
                 total += int(value)
             else:
                 total += _sum_tokens(value, key_substrings)

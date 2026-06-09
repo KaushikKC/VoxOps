@@ -7,7 +7,7 @@ aggregate without recomputing on every request.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     JSON,
@@ -25,7 +25,7 @@ from app.database import Base
 
 
 def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 class Conversation(Base):
@@ -89,8 +89,8 @@ class Conversation(Base):
     # --- SLO state ---
     breached_slo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
-    # --- Provenance ---
-    source: Mapped[str] = mapped_column(String, default="webhook")  # webhook|relay|backfill|simulator
+    # --- Provenance --- (source: webhook|relay|backfill|simulator)
+    source: Mapped[str] = mapped_column(String, default="webhook")
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
