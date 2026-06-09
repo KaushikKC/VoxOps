@@ -1,0 +1,39 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+
+# ---- Databases / local data ----
+*.db
+*.sqlite
+*.sqlite3
+backend/data/
+chroma/
+.chroma/
+
+# ---- Secrets / env ----
+.env
+.env.*
+!.env.example
+
+# ---- Node / frontend ----
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.local
+
+# ---- Editors / OS ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
