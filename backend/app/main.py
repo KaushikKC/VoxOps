@@ -69,3 +69,6 @@ def health() -> dict:
 
 
 # API routers are registered as they are implemented (see app/routers/).
+from app.routers import webhooks  # noqa: E402
+
+app.include_router(webhooks.router)
