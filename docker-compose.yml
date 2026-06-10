@@ -1,0 +1,39 @@
+# Voice Agent Observability Dashboard — full stack.
+#
+#   docker compose up --build
+#   open http://localhost:8080      (dashboard)
+#   open http://localhost:8000/docs (API)
+#
+# The browser talks to the backend directly on :8000 for REST + the relay
+# WebSocket, so both ports are published.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: sqlite:///./data/observability.db
+      CHROMA_PERSIST_DIR: ./data/chroma
+      # Allow the dockerized frontend origin to call the API.
+      CORS_ORIGINS: http://localhost:8080,http://localhost:5173
+      # For local demos accept unsigned webhooks; set a secret in production.
+      ELEVENLABS_VERIFY_SIGNATURE: "false"
+      ELEVENLABS_WEBHOOK_SECRET: ${ELEVENLABS_WEBHOOK_SECRET:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - backend-data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: http://localhost:8000
+        VITE_WS_BASE: ws://localhost:8000
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
