@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 def _since(days: int | None) -> datetime | None:
-    return datetime.utcnow() - timedelta(days=days) if days else None
+    return datetime.now(UTC) - timedelta(days=days) if days else None
 
 
 @router.get("/summary", response_model=KpiSummary)

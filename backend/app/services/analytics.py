@@ -8,7 +8,7 @@ accurate enough for a fleet view and keeps the query portable.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -76,7 +76,7 @@ def time_series(
     bucket: str = "day",
 ) -> list[TimeSeriesPoint]:
     """Bucketed time series over the trailing ``days`` window."""
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
     rows = db.execute(
         _base_filters(select(Conversation), agent_id, since).order_by(
             Conversation.ingested_at
