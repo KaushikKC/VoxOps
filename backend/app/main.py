@@ -74,6 +74,7 @@ from app.routers import (  # noqa: E402
     analytics,
     audit,
     conversations,
+    relay,
     search,
     webhooks,
 )
@@ -84,3 +85,4 @@ app.include_router(analytics.router)
 app.include_router(alerts.router)
 app.include_router(audit.router)
 app.include_router(search.router)
+app.include_router(relay.router)
