@@ -27,6 +27,7 @@ Reference event shapes (server -> client)::
 
 from __future__ import annotations
 
+import asyncio
 import time
 from dataclasses import dataclass, field
 
@@ -53,6 +54,23 @@ class LiveConversation:
     vad_samples: list[float] = field(default_factory=list)
     interruptions: int = 0
     _last_user_at: float | None = None
+
+    # ---- human-in-the-loop control ----
+    # "ai" while the agent is driving; "human" after a supervisor takes over.
+    control: str = "ai"
+    supervisor: str | None = None
+    had_takeover: bool = False
+
+    def add_human_message(self, text: str) -> TranscriptTurn:
+        """Append a supervisor-authored turn (delivered to the user as the agent)."""
+        turn = TranscriptTurn(
+            role="agent",
+            message=text,
+            time_in_call_secs=self.elapsed_secs,
+            source_medium="human_supervisor",
+        )
+        self.turns.append(turn)
+        return turn
 
     # ---- derived live values ----
     @property
@@ -141,6 +159,8 @@ class LiveConversation:
             "vad_score": self.last_vad,
             "last_role": self.turns[-1].role if self.turns else None,
             "last_message": self.turns[-1].message if self.turns else None,
+            "control": self.control,
+            "supervisor": self.supervisor,
         }
 
     def to_conversation_data(self, termination_reason: str = "client_ended") -> ConversationData:
@@ -165,18 +185,75 @@ class RelayManager:
     def __init__(self) -> None:
         self._live: dict[str, LiveConversation] = {}
         self._monitors: set = set()
+        # Per-conversation queues used to push control commands (take over,
+        # hand back, human message) down to the producer/bridge socket.
+        self._control: dict[str, asyncio.Queue] = {}
 
     # ---- live conversation lifecycle ----
     def start(self, agent_id: str, conversation_id: str) -> LiveConversation:
         live = LiveConversation(agent_id=agent_id, conversation_id=conversation_id)
         self._live[conversation_id] = live
+        self._control[conversation_id] = asyncio.Queue()
         return live
 
     def end(self, conversation_id: str) -> LiveConversation | None:
+        self._control.pop(conversation_id, None)
         return self._live.pop(conversation_id, None)
 
     def get(self, conversation_id: str) -> LiveConversation | None:
         return self._live.get(conversation_id)
+
+    def control_queue(self, conversation_id: str) -> asyncio.Queue | None:
+        return self._control.get(conversation_id)
+
+    # ---- human-in-the-loop control plane ----
+    async def _push_control(self, conversation_id: str, message: dict) -> None:
+        queue = self._control.get(conversation_id)
+        if queue is not None:
+            await queue.put(message)
+
+    async def take_over(self, conversation_id: str, supervisor: str) -> LiveConversation | None:
+        """A supervisor assumes control of the call from the AI agent."""
+        live = self._live.get(conversation_id)
+        if live is None:
+            return None
+        live.control = "human"
+        live.supervisor = supervisor
+        live.had_takeover = True
+        # Tell the producer to stop the AI agent (mute/stop generating).
+        await self._push_control(
+            conversation_id, {"type": "control", "action": "take_over", "supervisor": supervisor}
+        )
+        await self.broadcast(
+            {"type": "takeover", "conversation_id": conversation_id, "supervisor": supervisor}
+        )
+        await self.broadcast(live.frame())
+        return live
+
+    async def hand_back(self, conversation_id: str) -> LiveConversation | None:
+        """Return control of the call to the AI agent."""
+        live = self._live.get(conversation_id)
+        if live is None:
+            return None
+        live.control = "ai"
+        await self._push_control(conversation_id, {"type": "control", "action": "hand_back"})
+        await self.broadcast(
+            {"type": "handback", "conversation_id": conversation_id}
+        )
+        await self.broadcast(live.frame())
+        return live
+
+    async def say(self, conversation_id: str, text: str) -> LiveConversation | None:
+        """Inject a supervisor message, delivered to the user as the agent."""
+        live = self._live.get(conversation_id)
+        if live is None or live.control != "human":
+            return None
+        live.add_human_message(text)
+        await self._push_control(
+            conversation_id, {"type": "control", "action": "human_message", "text": text}
+        )
+        await self.broadcast(live.frame())
+        return live
 
     @property
     def active(self) -> list[dict]:
