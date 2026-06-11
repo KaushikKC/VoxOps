@@ -32,8 +32,9 @@ frontend/dist/
 frontend/.vite/
 *.local
 
-# ---- Editors / OS ----
+# ---- Editors / OS / tooling ----
 .DS_Store
 .idea/
 .vscode/
+.claude/
 *.swp
