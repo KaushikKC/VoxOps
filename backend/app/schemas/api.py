@@ -49,6 +49,8 @@ class ConversationSummary(_ORM):
     sentiment_score: float | None
     cost_total_usd: float
     breached_slo: bool
+    human_takeover: bool
+    supervisor: str | None
     source: str
 
 
