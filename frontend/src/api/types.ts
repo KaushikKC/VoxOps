@@ -12,6 +12,8 @@ export interface ConversationSummary {
   interruption_count: number;
   interruption_rate: number;
   llm_ttfb_p95_ms: number | null;
+  e2e_latency_p95_ms: number | null;
+  bottleneck_stage: string | null;
   sentiment_overall: string | null;
   sentiment_score: number | null;
   cost_total_usd: number;
@@ -19,6 +21,12 @@ export interface ConversationSummary {
   human_takeover: boolean;
   supervisor: string | null;
   source: string;
+}
+
+export interface PipelineStage {
+  stage: string;
+  vendor: string;
+  duration_ms: number;
 }
 
 export interface Turn {
@@ -30,6 +38,9 @@ export interface Turn {
   original_message: string | null;
   llm_ttfb_ms: number | null;
   llm_ttf_sentence_ms: number | null;
+  e2e_latency_ms: number | null;
+  bottleneck_stage: string | null;
+  pipeline_stages: PipelineStage[] | null;
   llm_input_tokens: number | null;
   llm_output_tokens: number | null;
   tool_calls: unknown[] | null;
@@ -51,6 +62,8 @@ export interface ConversationDetail extends ConversationSummary {
   llm_ttfb_p50_ms: number | null;
   llm_ttfb_max_ms: number | null;
   llm_ttf_sentence_p95_ms: number | null;
+  e2e_latency_p50_ms: number | null;
+  stage_latency_p95: Record<string, number> | null;
   cost_call_usd: number;
   cost_llm_usd: number;
   cost_tts_usd: number;
@@ -74,11 +87,28 @@ export interface KpiSummary {
   avg_duration_secs: number;
   llm_ttfb_p50_ms: number | null;
   llm_ttfb_p95_ms: number | null;
+  e2e_latency_p95_ms: number | null;
   interruption_rate: number;
   avg_cost_usd: number;
   total_cost_usd: number;
   negative_sentiment_rate: number;
   slo_breach_rate: number;
+}
+
+export interface StageStat {
+  stage: string;
+  vendor: string;
+  p95_ms: number;
+  share_of_e2e: number;
+  bottleneck_count: number;
+}
+
+export interface PipelineBreakdown {
+  conversations: number;
+  e2e_latency_p50_ms: number | null;
+  e2e_latency_p95_ms: number | null;
+  dominant_bottleneck: string | null;
+  stages: StageStat[];
 }
 
 export interface TimeSeriesPoint {

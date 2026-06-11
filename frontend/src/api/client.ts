@@ -7,6 +7,7 @@ import type {
   ConversationDetail,
   ConversationPage,
   KpiSummary,
+  PipelineBreakdown,
   ReplayResponse,
   SearchHit,
   TimeSeriesPoint,
@@ -56,6 +57,8 @@ export const api = {
   timeseries: (params?: { agent_id?: string; days?: number; bucket?: string }) =>
     get<TimeSeriesPoint[]>("/analytics/timeseries", params),
   agents: (params?: { days?: number }) => get<AgentStats[]>("/analytics/agents", params),
+  pipeline: (params?: { agent_id?: string; days?: number }) =>
+    get<PipelineBreakdown>("/analytics/pipeline", params),
 
   conversations: (filters?: ConversationFilters) =>
     get<ConversationPage>("/conversations", filters as Record<string, unknown>),
