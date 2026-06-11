@@ -11,12 +11,21 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import re
 from functools import lru_cache
 
 from app.config import get_settings
 from app.schemas.api import SearchHit
 from app.schemas.elevenlabs import ConversationData
+
+# Disable Chroma's telemetry phone-home before chromadb is ever imported. Some
+# chromadb/posthog version pairs raise a noisy (harmless) "capture() takes 1
+# positional argument" error on every event; this silences it at the source.
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+os.environ.setdefault("CHROMA_TELEMETRY_ENABLED", "False")
+logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
+logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICAL)
 
 logger = logging.getLogger("observability.search")
 settings = get_settings()
