@@ -19,6 +19,18 @@ A voice agent that "demos well" and a voice agent that's *reliable in production
 
 This dashboard answers all of the above.
 
+## Features
+
+- **HMAC-verified webhook ingestion** of `post_call_transcription` (constant-time, replay-protected), idempotent on `conversation_id`.
+- **Real-time relay** that sits between the agent and user, tracking live latency, interruptions and VAD, with a live dashboard monitor over WebSocket.
+- **Metrics engine** — LLM TTFB p50/p95/max, time-to-first-sentence, interruption (barge-in) rate, talk ratio.
+- **Exact cost model** mirroring ElevenLabs billing: call minutes + LLM tokens + TTS + ASR.
+- **Sentiment & task-completion judging** — deterministic offline analyzer by default, Claude when an API key is present.
+- **Semantic transcript search** (Chroma) — "find calls where the user was angry about billing".
+- **Replay / audit view** — turn-by-turn timeline with a latency waterfall, interruptions, per-turn sentiment and cost breakdown. Every access is logged.
+- **SLO alerting** — per-call and fleet-level breaches on latency, interruptions and success rate.
+- **Runs fully offline** — a conversation simulator seeds realistic data with no ElevenLabs or Claude account required.
+
 ## How it integrates with ElevenLabs
 
 ElevenLabs exposes conversation data through three surfaces; this project uses all three:
@@ -70,19 +82,35 @@ python -m app.simulator --calls 50
 # Frontend
 cd ../frontend
 npm install
-npm run dev
+npm run dev          # http://localhost:5173
+```
+
+**See the Live Monitor in action** — with the backend running:
+
+```bash
+cd backend && python scripts/relay_demo.py     # then open /live in the dashboard
 ```
 
 Or run everything with Docker:
 
 ```bash
 docker compose up --build
+# dashboard → http://localhost:8080   ·   API docs → http://localhost:8000/docs
 ```
+
+A `Makefile` wraps the common tasks: `make install`, `make backend`, `make frontend`, `make seed`, `make test`, `make lint`, `make up`.
 
 ## Documentation
 
 - Backend API: `http://localhost:8000/docs` (auto-generated OpenAPI)
-- See [`docs/`](docs/) for the data model and metric definitions.
+- [Architecture & data flow](docs/architecture.md)
+- [Metric definitions](docs/metrics.md)
+
+## Testing
+
+```bash
+cd backend && pytest -q      # unit + integration (HMAC, metrics, cost, API, relay)
+```
 
 ## License
 
