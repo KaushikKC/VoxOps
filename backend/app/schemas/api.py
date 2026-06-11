@@ -23,6 +23,9 @@ class TurnOut(_ORM):
     original_message: str | None
     llm_ttfb_ms: float | None
     llm_ttf_sentence_ms: float | None
+    e2e_latency_ms: float | None
+    bottleneck_stage: str | None
+    pipeline_stages: list | None
     llm_input_tokens: int | None
     llm_output_tokens: int | None
     tool_calls: list | None
@@ -45,6 +48,8 @@ class ConversationSummary(_ORM):
     interruption_count: int
     interruption_rate: float
     llm_ttfb_p95_ms: float | None
+    e2e_latency_p95_ms: float | None
+    bottleneck_stage: str | None
     sentiment_overall: str | None
     sentiment_score: float | None
     cost_total_usd: float
@@ -69,6 +74,8 @@ class ConversationDetail(ConversationSummary):
     llm_ttfb_p50_ms: float | None
     llm_ttfb_max_ms: float | None
     llm_ttf_sentence_p95_ms: float | None
+    e2e_latency_p50_ms: float | None
+    stage_latency_p95: dict | None
     cost_call_usd: float
     cost_llm_usd: float
     cost_tts_usd: float
@@ -95,6 +102,7 @@ class KpiSummary(BaseModel):
     avg_duration_secs: float
     llm_ttfb_p50_ms: float | None
     llm_ttfb_p95_ms: float | None
+    e2e_latency_p95_ms: float | None
     interruption_rate: float
     avg_cost_usd: float
     total_cost_usd: float
@@ -109,6 +117,22 @@ class TimeSeriesPoint(BaseModel):
     llm_ttfb_p95_ms: float | None
     interruption_rate: float
     avg_cost_usd: float
+
+
+class StageStat(BaseModel):
+    stage: str
+    vendor: str
+    p95_ms: float
+    share_of_e2e: float  # fraction of total pipeline time this stage represents
+    bottleneck_count: int  # how many calls this stage was the dominant bottleneck
+
+
+class PipelineBreakdown(BaseModel):
+    conversations: int
+    e2e_latency_p50_ms: float | None
+    e2e_latency_p95_ms: float | None
+    dominant_bottleneck: str | None
+    stages: list[StageStat]
 
 
 class AgentStats(BaseModel):
