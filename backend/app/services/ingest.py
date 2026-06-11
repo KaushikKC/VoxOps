@@ -20,6 +20,11 @@ from app.schemas.elevenlabs import ConversationData, TranscriptTurn
 from app.services import sentiment
 from app.services.cost import compute_cost
 from app.services.metrics import compute_call_metrics, extract_turn_latencies
+from app.services.pipeline import (
+    TurnPipeline,
+    aggregate_conversation_pipeline,
+    compute_turn_pipeline,
+)
 
 logger = logging.getLogger("observability.ingest")
 settings = get_settings()
@@ -134,9 +139,13 @@ def ingest_conversation(
     conv.breached_slo = _evaluates_slo_breach(metrics.llm_ttfb_p95_ms)
 
     # Build turns
+    turn_pipelines: list[TurnPipeline] = []
     for index, t in enumerate(data.transcript):
         ttfb, ttf_sentence = extract_turn_latencies(t)
         turn_sentiment = sentiment.score_text(t.message) if t.role == "user" else None
+        pipeline = compute_turn_pipeline(t.pipeline_stages)
+        if pipeline is not None:
+            turn_pipelines.append(pipeline)
         conv.turns.append(
             Turn(
                 turn_index=index,
@@ -147,6 +156,9 @@ def ingest_conversation(
                 original_message=t.original_message,
                 llm_ttfb_ms=ttfb,
                 llm_ttf_sentence_ms=ttf_sentence,
+                e2e_latency_ms=pipeline.e2e_latency_ms if pipeline else None,
+                bottleneck_stage=pipeline.bottleneck_stage if pipeline else None,
+                pipeline_stages=pipeline.stages if pipeline else None,
                 llm_input_tokens=_sum_turn_tokens(t, ("input", "prompt")),
                 llm_output_tokens=_sum_turn_tokens(t, ("output", "completion")),
                 tool_calls=t.tool_calls,
@@ -156,6 +168,13 @@ def ingest_conversation(
                 source_medium=t.source_medium,
             )
         )
+
+    # Conversation-level pipeline aggregates.
+    conv_pipeline = aggregate_conversation_pipeline(turn_pipelines)
+    conv.e2e_latency_p50_ms = conv_pipeline.e2e_latency_p50_ms
+    conv.e2e_latency_p95_ms = conv_pipeline.e2e_latency_p95_ms
+    conv.bottleneck_stage = conv_pipeline.bottleneck_stage
+    conv.stage_latency_p95 = conv_pipeline.stage_latency_p95
 
     db.flush()
     logger.info(
@@ -167,6 +186,29 @@ def ingest_conversation(
         conv.cost_total_usd,
     )
     return conv
+
+
+def recompute_conversation_pipeline(conv: Conversation) -> None:
+    """Recompute per-turn and call-level pipeline metrics from stored turns.
+
+    Used after the ``/traces`` endpoint attaches multi-vendor stage timings to an
+    already-ingested conversation.
+    """
+    turn_pipelines: list[TurnPipeline] = []
+    for turn in conv.turns:
+        pipeline = compute_turn_pipeline(turn.pipeline_stages)
+        if pipeline is None:
+            continue
+        turn.e2e_latency_ms = pipeline.e2e_latency_ms
+        turn.bottleneck_stage = pipeline.bottleneck_stage
+        turn.pipeline_stages = pipeline.stages
+        turn_pipelines.append(pipeline)
+
+    conv_pipeline = aggregate_conversation_pipeline(turn_pipelines)
+    conv.e2e_latency_p50_ms = conv_pipeline.e2e_latency_p50_ms
+    conv.e2e_latency_p95_ms = conv_pipeline.e2e_latency_p95_ms
+    conv.bottleneck_stage = conv_pipeline.bottleneck_stage
+    conv.stage_latency_p95 = conv_pipeline.stage_latency_p95
 
 
 def list_recent_conversation_ids(db: Session, limit: int = 100) -> list[str]:
