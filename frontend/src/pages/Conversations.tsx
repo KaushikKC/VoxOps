@@ -100,7 +100,10 @@ export function Conversations() {
                 <td>{ms(c.llm_ttfb_p95_ms)}</td>
                 <td>{c.interruption_count}</td>
                 <td>{usd(c.cost_total_usd)}</td>
-                <td>{c.breached_slo && <Badge kind="slo" label="SLO" />}</td>
+                <td style={{ display: "flex", gap: 4 }}>
+                  {c.breached_slo && <Badge kind="slo" label="SLO" />}
+                  {c.human_takeover && <Badge kind="warning" label="human" />}
+                </td>
               </tr>
             ))}
             {page.data && page.data.items.length === 0 && (

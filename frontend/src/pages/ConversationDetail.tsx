@@ -155,6 +155,7 @@ export function ConversationDetail() {
           <SuccessBadge value={c.call_successful} />
           <SentimentBadge value={c.sentiment_overall} />
           {c.breached_slo && <Badge kind="slo" label="SLO breached" />}
+          {c.human_takeover && <Badge kind="warning" label={`human: ${c.supervisor ?? "supervisor"}`} />}
           <Badge kind="info" label={c.source} />
         </div>
       </div>
