@@ -69,7 +69,16 @@ the AI. The persisted conversation is tagged `human_takeover` + `supervisor`.
 The ingest WS runs the producer-read loop and the control-drain loop
 concurrently so commands are delivered without blocking event ingestion.
 
-### 3. REST backfill (reconciliation)
+### 3. Multi-vendor trace enrichment
+
+`POST /traces` lets the orchestrator (the layer wiring Twilio/Vapi + OpenAI/
+Anthropic + ElevenLabs) report the per-turn stage timings ElevenLabs can't see.
+Decoupled from the webhook on purpose — traces may arrive before or after the
+transcript — it matches turns by `turn_index`, attaches stages, and recomputes
+true end-to-end latency + the bottleneck stage (`services/pipeline.py`). The
+simulator emits these stages inline so the feature is demoable offline.
+
+### 4. REST backfill (reconciliation)
 
 The conversation detail and replay endpoints serve the stored, normalized data;
 the raw event log allows re-running the normalizer after a metric-logic change.

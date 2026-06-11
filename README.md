@@ -25,6 +25,7 @@ This dashboard answers all of the above.
 - **Real-time relay** that sits between the agent and user, tracking live latency, interruptions and VAD, with a live dashboard monitor over WebSocket.
 - **Human-in-the-loop takeover** — a supervisor can watch a live call, hit **Take Over** to mute the AI and bridge in as the agent, send messages in real time, then **Hand Back**. Every takeover is recorded and the call is tagged `human_takeover`.
 - **Metrics engine** — LLM TTFB p50/p95/max, time-to-first-sentence, interruption (barge-in) rate, talk ratio.
+- **Multi-vendor pipeline tracing** — computes *true* end-to-end latency (user-stops-speaking → first audio out) across the whole stack (Deepgram ASR → OpenAI/Anthropic LLM → ElevenLabs TTS → Twilio transport) and pinpoints the **bottleneck stage** per turn and across the fleet — the thing ElevenLabs alone can't see. Orchestrators report the stages ElevenLabs doesn't via `POST /traces`.
 - **Exact cost model** mirroring ElevenLabs billing: call minutes + LLM tokens + TTS + ASR.
 - **Sentiment & task-completion judging** — deterministic offline analyzer by default, Claude when an API key is present.
 - **Semantic transcript search** (Chroma) — "find calls where the user was angry about billing".

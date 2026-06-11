@@ -20,6 +20,26 @@ In the **live relay**, per-turn latency is synthesized as the wall-clock gap
 between a user transcript and the following agent response, since real
 `conversation_turn_metrics` only arrive post-call.
 
+## Multi-vendor pipeline latency
+
+In a real deployment a turn is a relay race across vendors. ElevenLabs only sees
+its own (TTS) stage, so the *true* end-to-end number lives nowhere unless you
+assemble it.
+
+| Metric | Definition |
+|---|---|
+| **Stage** | One vendor's contribution to a turn: `asr` (Deepgram), `llm` (OpenAI/Anthropic), `tts` (ElevenLabs), `transport` (Twilio/Vapi) |
+| **End-to-end (E2E) latency** | Sum of all stages for a turn = user-stops-speaking → first audio out |
+| **Bottleneck stage** | The slowest stage in a turn; the dominant bottleneck of a call is its most frequent |
+| **Stage p95** | p95 of a stage's duration across turns/calls |
+| **Share of E2E** | A stage's p95 as a fraction of the summed stage p95 — where the time goes |
+
+**How stages arrive:** the simulator emits them inline; in production your
+orchestrator (the layer wiring Twilio + the LLM + ElevenLabs) reports the stages
+ElevenLabs can't see via `POST /traces` (`{conversation_id, turns:[{turn_index,
+stages:[{stage, vendor, duration_ms}]}]}`), which enriches the stored turns and
+recomputes E2E + bottleneck. Fleet view: `GET /analytics/pipeline`.
+
 ## Interruptions (barge-in)
 
 | Metric | Definition |
