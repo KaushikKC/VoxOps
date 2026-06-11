@@ -72,6 +72,14 @@ class Conversation(Base):
     llm_ttfb_max_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     llm_ttf_sentence_p95_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # --- Multi-vendor end-to-end pipeline latency ---
+    e2e_latency_p50_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    e2e_latency_p95_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Most frequent bottleneck stage across this call's agent turns.
+    bottleneck_stage: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    # {stage: p95_ms} across the call, e.g. {"asr":120,"llm":900,"tts":300}.
+    stage_latency_p95: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
     sentiment_overall: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
     sentiment_score: Mapped[float | None] = mapped_column(Float, nullable=True)
 
