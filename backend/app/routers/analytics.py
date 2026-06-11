@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.api import AgentStats, KpiSummary, TimeSeriesPoint
+from app.schemas.api import AgentStats, KpiSummary, PipelineBreakdown, TimeSeriesPoint
 from app.services import analytics
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -46,3 +46,13 @@ def agents(
 ) -> list[AgentStats]:
     """Per-agent performance breakdown."""
     return analytics.agent_stats(db, since=_since(days))
+
+
+@router.get("/pipeline", response_model=PipelineBreakdown)
+def pipeline(
+    db: Session = Depends(get_db),
+    agent_id: str | None = None,
+    days: int | None = Query(default=None, ge=1, le=365),
+) -> PipelineBreakdown:
+    """Multi-vendor pipeline latency: true end-to-end + per-stage p95 + bottleneck."""
+    return analytics.pipeline_breakdown(db, agent_id=agent_id, since=_since(days))
