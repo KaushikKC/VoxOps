@@ -27,10 +27,14 @@ from app.schemas.elevenlabs import (
     ChargingModel,
     ConversationData,
     MetadataModel,
+    PipelineStage,
     TranscriptTurn,
     TurnMetrics,
     TurnMetricValue,
 )
+
+# LLM brains vary by deployment; pick one per simulated call.
+_LLM_VENDORS = ["openai", "anthropic"]
 
 # (agent_id, agent_name, scenario title, [(role, message), ...], base_outcome)
 _SCENARIOS = [
@@ -114,10 +118,30 @@ def _latency_for_turn(slow: bool) -> float:
     return round(random.uniform(0.25, 1.1), 3)
 
 
+def _pipeline_stages(ttfb_secs: float, llm_vendor: str, slow_tts: bool) -> list[PipelineStage]:
+    """Realistic multi-vendor stage breakdown for one agent turn (ms).
+
+    The LLM stage mirrors the ElevenLabs-reported TTFB; the other stages come
+    from the vendors ElevenLabs cannot see. Occasionally TTS (ElevenLabs audio
+    buffering) is the bottleneck rather than the LLM.
+    """
+    asr_ms = round(random.uniform(70, 180), 1)
+    tts_ms = round(random.uniform(900, 1600) if slow_tts else random.uniform(120, 420), 1)
+    return [
+        PipelineStage(stage="asr", vendor="deepgram", duration_ms=asr_ms),
+        PipelineStage(stage="llm", vendor=llm_vendor, duration_ms=round(ttfb_secs * 1000, 1)),
+        PipelineStage(stage="tts", vendor="elevenlabs", duration_ms=tts_ms),
+        PipelineStage(
+            stage="transport", vendor="twilio", duration_ms=round(random.uniform(40, 120), 1)
+        ),
+    ]
+
+
 def _build_conversation(index: int, now: datetime, days: int) -> ConversationData:
     agent_id, agent_name, title, script, base_outcome = random.choice(_SCENARIOS)
-    slow = random.random() < 0.22  # ~22% of calls are slow
+    slow = random.random() < 0.22  # ~22% of calls are slow (LLM bottleneck)
     interrupt = random.random() < 0.3
+    llm_vendor = random.choice(_LLM_VENDORS)
 
     start = now - timedelta(
         days=random.uniform(0, days),
@@ -147,6 +171,8 @@ def _build_conversation(index: int, now: datetime, days: int) -> ConversationDat
             total_input_tokens += in_tok
             total_output_tokens += out_tok
             interrupted = interrupt and i == len(script) - 2
+            # ~15% of turns have ElevenLabs TTS as the bottleneck instead of LLM.
+            slow_tts = not slow and random.random() < 0.15
             turns.append(
                 TranscriptTurn(
                     role="agent",
@@ -155,6 +181,7 @@ def _build_conversation(index: int, now: datetime, days: int) -> ConversationDat
                     interrupted=interrupted,
                     conversation_turn_metrics=metrics,
                     llm_usage={"category": {"input_tokens": in_tok, "output_tokens": out_tok}},
+                    pipeline_stages=_pipeline_stages(ttfb, llm_vendor, slow_tts),
                 )
             )
         else:
