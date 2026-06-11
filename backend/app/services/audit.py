@@ -6,9 +6,13 @@ Centralizes writing ``AuditLog`` rows so every read of a PII-bearing transcript
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
 from app.models import AuditLog
+
+logger = logging.getLogger("observability.audit")
 
 
 def record(
@@ -21,8 +25,11 @@ def record(
     detail: dict | None = None,
     ip_address: str | None = None,
     commit: bool = True,
-) -> AuditLog:
-    """Append an audit entry. Commits by default for fire-and-forget call sites."""
+) -> AuditLog | None:
+    """Append an audit entry. Best-effort: a failed audit write must never break
+    the request it is recording (e.g. viewing a transcript), so any error is
+    logged and swallowed rather than propagated.
+    """
     entry = AuditLog(
         actor=actor,
         action=action,
@@ -31,7 +38,12 @@ def record(
         detail=detail,
         ip_address=ip_address,
     )
-    db.add(entry)
-    if commit:
-        db.commit()
-    return entry
+    try:
+        db.add(entry)
+        if commit:
+            db.commit()
+        return entry
+    except Exception as exc:  # e.g. read-only DB / replica
+        logger.warning("audit log write failed (%s %s): %s", action, resource_id, exc)
+        db.rollback()
+        return None
