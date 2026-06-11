@@ -16,7 +16,8 @@ import {
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
 import { Badge, SentimentBadge, SuccessBadge } from "../components/Badge";
-import { duration, ms, pct, usd } from "../components/format";
+import { PipelineBar, StageLegend } from "../components/PipelineBar";
+import { duration, ms, pct, stageColor, usd } from "../components/format";
 import type { ConversationDetail as Detail, Turn } from "../api/types";
 
 const SLO_TTFB = 1500;
@@ -99,6 +100,53 @@ function LatencyWaterfall({ turns }: { turns: Turn[] }) {
   );
 }
 
+function PipelineLatency({ c }: { c: Detail }) {
+  const turns = c.turns.filter((t) => t.pipeline_stages && t.pipeline_stages.length > 0);
+  if (turns.length === 0) return null;
+  // Shared scale so bars are comparable across turns.
+  const maxE2e = Math.max(...turns.map((t) => t.e2e_latency_ms ?? 0));
+  const allStages = Array.from(
+    new Set(turns.flatMap((t) => (t.pipeline_stages ?? []).map((s) => s.stage))),
+  );
+  return (
+    <div className="card">
+      <h3>True end-to-end latency (multi-vendor pipeline)</h3>
+      <p className="faint" style={{ marginTop: -8 }}>
+        User-stops-speaking → first audio out, across every vendor. ElevenLabs only sees the
+        TTS slice; the bottleneck stage is highlighted.
+      </p>
+      <div className="timeline" style={{ marginTop: 12 }}>
+        {turns.map((t) => (
+          <div key={t.turn_index}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                fontSize: 12,
+                marginBottom: 4,
+              }}
+            >
+              <span className="faint">turn #{t.turn_index}</span>
+              <span>
+                <b>{ms(t.e2e_latency_ms)}</b>{" "}
+                <span className="faint" style={{ color: stageColor(t.bottleneck_stage ?? "") }}>
+                  · {t.bottleneck_stage} bound
+                </span>
+              </span>
+            </div>
+            <PipelineBar
+              stages={t.pipeline_stages ?? []}
+              bottleneck={t.bottleneck_stage}
+              total={maxE2e}
+            />
+          </div>
+        ))}
+      </div>
+      <StageLegend stages={allStages} />
+    </div>
+  );
+}
+
 function TurnBubble({ turn }: { turn: Turn }) {
   const slow = turn.llm_ttfb_ms !== null && turn.llm_ttfb_ms > SLO_TTFB;
   return (
@@ -171,6 +219,7 @@ export function ConversationDetail() {
 
       <div className="split" style={{ marginBottom: 16 }}>
         <div className="grid" style={{ gap: 16 }}>
+          <PipelineLatency c={c} />
           <LatencyWaterfall turns={c.turns} />
           <div className="card">
             <h3>Replay timeline</h3>
@@ -189,8 +238,14 @@ export function ConversationDetail() {
             <Stat label="Turns" value={`${c.turn_count} (${c.agent_turn_count}A / ${c.user_turn_count}U)`} />
             <Stat label="Interruptions" value={`${c.interruption_count} (${pct(c.interruption_rate)})`} />
             <Stat label="Talk ratio (agent)" value={c.talk_ratio !== null ? pct(c.talk_ratio) : "—"} />
-            <Stat label="TTFB p50 / p95" value={`${ms(c.llm_ttfb_p50_ms)} / ${ms(c.llm_ttfb_p95_ms)}`} />
-            <Stat label="TTFB max" value={ms(c.llm_ttfb_max_ms)} />
+            <Stat label="LLM TTFB p50 / p95" value={`${ms(c.llm_ttfb_p50_ms)} / ${ms(c.llm_ttfb_p95_ms)}`} />
+            {c.e2e_latency_p95_ms !== null && (
+              <Stat
+                label="E2E p50 / p95"
+                value={`${ms(c.e2e_latency_p50_ms)} / ${ms(c.e2e_latency_p95_ms)}`}
+              />
+            )}
+            {c.bottleneck_stage && <Stat label="Bottleneck" value={c.bottleneck_stage} />}
             <Stat label="Language" value={c.main_language ?? "—"} />
             <Stat label="Ended" value={c.termination_reason ?? "—"} />
           </div>
