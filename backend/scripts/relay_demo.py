@@ -34,22 +34,50 @@ SCRIPT = [
 ]
 
 
+async def _receiver(ws) -> None:
+    """Print everything the relay sends back — acks and supervisor control.
+
+    This is what makes the takeover demo work: when you click "Take over" in the
+    dashboard, the relay pushes a control message down this socket and it prints
+    here (a real bridge would mute the AI / play the human's words to the user).
+    """
+    try:
+        async for raw in ws:
+            msg = json.loads(raw)
+            if msg.get("type") == "ack":
+                frame = msg.get("frame", {})
+                print(
+                    f"    ↳ turns={frame.get('turn_count')} "
+                    f"interrupts={frame.get('interruptions')} "
+                    f"control={frame.get('control')}"
+                )
+            elif msg.get("type") == "control":
+                action = msg.get("action")
+                if action == "take_over":
+                    print(f"  ⛔ AI MUTED — supervisor {msg.get('supervisor')} took over")
+                elif action == "human_message":
+                    print(f"  🗣  supervisor says: {msg.get('text')}")
+                elif action == "hand_back":
+                    print("  ✅ control handed back to the AI")
+    except Exception:
+        pass
+
+
 async def run(base: str, agent_id: str, conversation_id: str, speed: float) -> None:
     uri = f"{base}/relay/ingest/{agent_id}?conversation_id={conversation_id}"
     async with websockets.connect(uri) as ws:
         print(f"streaming to {uri}")
+        print("open the dashboard's Live Monitor and click 'Take over' while this runs.\n")
+        recv = asyncio.create_task(_receiver(ws))
         for etype, payload in SCRIPT:
             event = {"type": etype, f"{etype}_event": payload}
             await ws.send(json.dumps(event))
-            ack = json.loads(await ws.recv())
-            frame = ack.get("frame", {})
-            print(
-                f"  {etype:<24} turns={frame.get('turn_count')} "
-                f"interrupts={frame.get('interruptions')} ping={frame.get('avg_ping_ms')}"
-            )
-            await asyncio.sleep(random.uniform(0.6, 1.6) / speed)
+            print(f"  {etype}")
+            await asyncio.sleep(random.uniform(1.2, 2.4) / speed)
         await ws.send(json.dumps({"type": "end"}))
-        print(f"ended — conversation {conversation_id} persisted.")
+        await asyncio.sleep(0.2)
+        recv.cancel()
+        print(f"\nended — conversation {conversation_id} persisted.")
 
 
 def main() -> None:
