@@ -23,6 +23,19 @@ export function duration(secs: number | null | undefined): string {
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
+// Consistent colors per pipeline stage across the dashboard.
+const STAGE_COLORS: Record<string, string> = {
+  asr: "#3fb98a",
+  endpointing: "#5b6478",
+  llm: "#b07cf0",
+  tts: "#6c8cff",
+  transport: "#e2b340",
+};
+
+export function stageColor(stage: string): string {
+  return STAGE_COLORS[stage] ?? "#8b94a7";
+}
+
 export function relativeTime(iso: string | null): string {
   if (!iso) return "—";
   const then = new Date(iso).getTime();
