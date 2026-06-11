@@ -37,6 +37,13 @@ class Turn(Base):
     llm_ttfb_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     llm_ttf_sentence_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # --- Multi-vendor pipeline breakdown (agent turns) ---
+    # e2e = user-stopped-speaking -> first audio out, summed across all vendors.
+    e2e_latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bottleneck_stage: Mapped[str | None] = mapped_column(String, nullable=True)
+    # [{stage, vendor, duration_ms}, ...]
+    pipeline_stages: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
     # --- Per-turn token usage (agent turns) ---
     llm_input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     llm_output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
