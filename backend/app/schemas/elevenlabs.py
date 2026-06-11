@@ -56,6 +56,20 @@ class LLMUsageTurn(_Lenient):
     model_config = ConfigDict(extra="allow")
 
 
+class PipelineStage(_Lenient):
+    """One vendor's contribution to a single turn's latency.
+
+    Used for multi-vendor stacks where the round trip spans several providers
+    (e.g. Deepgram ASR -> OpenAI/Anthropic LLM -> ElevenLabs TTS -> Twilio
+    transport). ElevenLabs only sees its own stage; the rest is reported by the
+    orchestrator either inline on the turn or via the ``/traces`` endpoint.
+    """
+
+    stage: str  # asr | llm | tts | transport | <custom>
+    vendor: str | None = None
+    duration_ms: float = 0.0
+
+
 class TranscriptTurn(_Lenient):
     role: str = "user"
     message: str | None = None
@@ -67,6 +81,8 @@ class TranscriptTurn(_Lenient):
     conversation_turn_metrics: TurnMetrics | None = None
     llm_usage: dict | None = None
     source_medium: str | None = None
+    # Multi-vendor per-turn latency breakdown (optional).
+    pipeline_stages: list[PipelineStage] | None = None
 
 
 class ChargingModel(_Lenient):
