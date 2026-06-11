@@ -89,6 +89,11 @@ class Conversation(Base):
     # --- SLO state ---
     breached_slo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
 
+    # --- Human-in-the-loop ---
+    # True if a supervisor took over the call from the AI agent at any point.
+    human_takeover: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    supervisor: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # --- Provenance --- (source: webhook|relay|backfill|simulator)
     source: Mapped[str] = mapped_column(String, default="webhook")
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
