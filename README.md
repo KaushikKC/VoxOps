@@ -23,6 +23,7 @@ This dashboard answers all of the above.
 
 - **HMAC-verified webhook ingestion** of `post_call_transcription` (constant-time, replay-protected), idempotent on `conversation_id`.
 - **Real-time relay** that sits between the agent and user, tracking live latency, interruptions and VAD, with a live dashboard monitor over WebSocket.
+- **Human-in-the-loop takeover** — a supervisor can watch a live call, hit **Take Over** to mute the AI and bridge in as the agent, send messages in real time, then **Hand Back**. Every takeover is recorded and the call is tagged `human_takeover`.
 - **Metrics engine** — LLM TTFB p50/p95/max, time-to-first-sentence, interruption (barge-in) rate, talk ratio.
 - **Exact cost model** mirroring ElevenLabs billing: call minutes + LLM tokens + TTS + ASR.
 - **Sentiment & task-completion judging** — deterministic offline analyzer by default, Claude when an API key is present.
@@ -85,11 +86,16 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-**See the Live Monitor in action** — with the backend running:
+**See the Live Monitor + human takeover in action** — with the backend running:
 
 ```bash
 cd backend && python scripts/relay_demo.py     # then open /live in the dashboard
 ```
+
+While the demo streams, open the dashboard's **Live Monitor**, click **Take over**
+on the active call, type a message as the agent, then **Hand back** — the demo
+terminal prints the control signals it receives (`AI MUTED`, the supervisor's
+words, `control handed back`).
 
 Or run everything with Docker:
 

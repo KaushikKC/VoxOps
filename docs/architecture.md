@@ -59,6 +59,16 @@ The relay sits in the event stream between the agent and the user.
   `ConversationData` shape used by the webhook path and persisted through the
   normalizer — so live calls land in the dashboard identically.
 
+**Human-in-the-loop takeover.** Each live call has a control queue. A supervisor
+calls `POST /relay/{id}/takeover`, which flips the call's control state to
+`human` and pushes a `take_over` control message *back down the producer socket*
+(the bridge mutes the AI). `POST /relay/{id}/say` injects a supervisor message —
+appended as an agent turn (`source_medium="human_supervisor"`) and pushed to the
+producer to deliver to the user. `POST /relay/{id}/handback` returns control to
+the AI. The persisted conversation is tagged `human_takeover` + `supervisor`.
+The ingest WS runs the producer-read loop and the control-drain loop
+concurrently so commands are delivered without blocking event ingestion.
+
 ### 3. REST backfill (reconciliation)
 
 The conversation detail and replay endpoints serve the stored, normalized data;
