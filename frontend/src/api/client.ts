@@ -30,10 +30,11 @@ async function get<T>(path: string, params?: Record<string, unknown>): Promise<T
   return res.json() as Promise<T>;
 }
 
-async function post<T>(path: string): Promise<T> {
+async function post<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(API_BASE + path, {
     method: "POST",
-    headers: { "x-actor": "dashboard" },
+    headers: { "x-actor": "dashboard", "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${path}`);
   return res.json() as Promise<T>;
@@ -70,4 +71,13 @@ export const api = {
 
   search: (q: string, limit = 10) =>
     get<{ query: string; hits: SearchHit[] }>("/search", { q, limit }),
+
+  // Human-in-the-loop relay control.
+  takeover: (conversationId: string, supervisor = "supervisor") =>
+    post<{ control: string }>(
+      `/relay/${conversationId}/takeover?supervisor=${encodeURIComponent(supervisor)}`,
+    ),
+  handback: (conversationId: string) => post<{ control: string }>(`/relay/${conversationId}/handback`),
+  say: (conversationId: string, text: string) =>
+    post<{ status: string }>(`/relay/${conversationId}/say`, { text }),
 };

@@ -16,6 +16,8 @@ export interface ConversationSummary {
   sentiment_score: number | null;
   cost_total_usd: number;
   breached_slo: boolean;
+  human_takeover: boolean;
+  supervisor: string | null;
   source: string;
 }
 
@@ -161,4 +163,6 @@ export interface LiveFrame {
   vad_score: number | null;
   last_role: string | null;
   last_message: string | null;
+  control: string;
+  supervisor: string | null;
 }
