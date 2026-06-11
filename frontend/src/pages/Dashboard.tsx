@@ -17,6 +17,7 @@ import {
 
 import { api } from "../api/client";
 import { useApi } from "../hooks/useApi";
+import { PipelineBar, StageLegend } from "../components/PipelineBar";
 import { ms, pct, usd } from "../components/format";
 
 const AXIS = { stroke: "#5b6478", fontSize: 11 };
@@ -37,8 +38,10 @@ export function Dashboard() {
   const summary = useApi(() => api.summary({ days }), [days]);
   const series = useApi(() => api.timeseries({ days, bucket: "day" }), [days]);
   const agents = useApi(() => api.agents({ days }), [days]);
+  const pipeline = useApi(() => api.pipeline({ days }), [days]);
 
   const s = summary.data;
+  const p = pipeline.data;
 
   return (
     <>
@@ -68,6 +71,11 @@ export function Dashboard() {
           label="LLM TTFB p95"
           value={s ? ms(s.llm_ttfb_p95_ms) : "—"}
           sub={s ? `p50 ${ms(s.llm_ttfb_p50_ms)}` : undefined}
+        />
+        <Kpi
+          label="E2E latency p95"
+          value={s ? ms(s.e2e_latency_p95_ms) : "—"}
+          sub="user-stop → first audio"
         />
         <Kpi
           label="Interruption Rate"
@@ -131,6 +139,50 @@ export function Dashboard() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {p && p.stages.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3>
+            Pipeline bottlenecks — true E2E p95 {ms(p.e2e_latency_p95_ms)}
+            {p.dominant_bottleneck && (
+              <span className="faint" style={{ fontWeight: 400 }}>
+                {"  ·  "}usually <b>{p.dominant_bottleneck}</b> bound
+              </span>
+            )}
+          </h3>
+          <PipelineBar
+            stages={p.stages.map((st) => ({
+              stage: st.stage,
+              vendor: st.vendor,
+              duration_ms: st.p95_ms,
+            }))}
+            bottleneck={p.dominant_bottleneck}
+          />
+          <StageLegend stages={p.stages.map((st) => st.stage)} />
+          <table className="table" style={{ marginTop: 14 }}>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Vendor</th>
+                <th>p95</th>
+                <th>Share of E2E</th>
+                <th>Bottleneck in</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.stages.map((st) => (
+                <tr key={st.stage}>
+                  <td>{st.stage}</td>
+                  <td className="muted">{st.vendor}</td>
+                  <td>{ms(st.p95_ms)}</td>
+                  <td>{pct(st.share_of_e2e)}</td>
+                  <td>{st.bottleneck_count} calls</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card">
         <h3>Per-agent performance</h3>
