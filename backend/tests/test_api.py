@@ -37,7 +37,7 @@ def _payload(conversation_id="conv_test_1", successful="success", slow=False):
                 "start_time_unix_secs": 1739537200,
                 "call_duration_secs": 30,
                 "cost": 120,
-                "charging": {"call_charge": 0.04, "llm_charge": 0.01},
+                "charging": {"call_charge": 400, "llm_charge": 100},  # credits
             },
             "analysis": {
                 "call_successful": successful,

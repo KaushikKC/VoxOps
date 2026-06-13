@@ -1,15 +1,19 @@
 """Cost model.
 
-ElevenLabs bills a conversation as the sum of:
+ElevenLabs meters usage in **credits**, not per-call dollars (that's why a call
+shows a credit cost in the API but no dollar amount on the free tier). The
+``charging`` object reports:
 
-* **call minutes** — a per-minute Agents charge (≈ $0.08/min, plan-dependent),
-* **LLM tokens** — invoiced separately on top of the per-minute charge,
-* **TTS** — characters / audio seconds synthesized,
-* **ASR** — speech-to-text input seconds.
+* ``call_charge`` / ``llm_charge`` — the call and LLM cost **in credits**,
+* ``llm_price`` — the LLM cost already expressed in **USD** (when available),
+* ``cost`` (on metadata) — the total credits for the call.
 
-The ``charging`` object in the webhook carries the authoritative numbers. When a
-field is present we use it; otherwise we estimate from call duration and token
-counts so a cost is always available (useful for the offline simulator).
+We convert credits to an estimated USD using a representative per-credit rate
+(``_USD_PER_CREDIT``), derived from observed ElevenLabs data
+(``llm_price / llm_charge`` ≈ $0.0001/credit). The dollar figure is therefore an
+estimate of what the consumed credits cost on a paid plan — the number an
+operator reasons about — while the raw credit total is retained for fidelity.
+When no charge breakdown is present we fall back to a duration/token estimate.
 """
 
 from __future__ import annotations
@@ -21,7 +25,11 @@ from app.schemas.elevenlabs import MetadataModel
 
 settings = get_settings()
 
-# Fallback unit economics (USD) used only when the payload omits explicit charges.
+# Representative USD value of one ElevenLabs credit (plan-dependent). Derived from
+# observed data: charging.llm_price / charging.llm_charge ≈ 0.0001 USD/credit.
+_USD_PER_CREDIT = 0.0001
+
+# Fallback unit economics (USD) used only when no charge/credit data is present.
 _LLM_USD_PER_1K_INPUT = 0.0005
 _LLM_USD_PER_1K_OUTPUT = 0.0015
 
@@ -54,12 +62,14 @@ def _sum_tokens(obj: object, key_substrings: tuple[str, ...]) -> int:
 
 
 def compute_cost(metadata: MetadataModel) -> CostBreakdown:
-    """Derive a USD cost breakdown from conversation metadata."""
+    """Derive a USD cost breakdown from conversation metadata (credits → USD)."""
     duration_minutes = max(metadata.call_duration_secs, 0) / 60.0
     charging = metadata.charging
+    total_credits = metadata.cost
 
     input_tokens = 0
     output_tokens = 0
+    call_usd = 0.0
     llm_usd = 0.0
     tts_usd = 0.0
     asr_usd = 0.0
@@ -68,20 +78,26 @@ def compute_cost(metadata: MetadataModel) -> CostBreakdown:
         if charging.llm_usage:
             input_tokens = _sum_tokens(charging.llm_usage, ("input", "prompt"))
             output_tokens = _sum_tokens(charging.llm_usage, ("output", "completion"))
-        # Explicit LLM charge wins; otherwise estimate from tokens.
-        if charging.llm_charge is not None:
-            llm_usd = float(charging.llm_charge)
+        # ElevenLabs charge fields are denominated in CREDITS.
+        if charging.call_charge is not None:
+            call_usd = float(charging.call_charge) * _USD_PER_CREDIT
+        # For the LLM portion, the real USD price is most accurate when present;
+        # otherwise convert its credit charge.
+        if charging.llm_price is not None:
+            llm_usd = float(charging.llm_price)
+        elif charging.llm_charge is not None:
+            llm_usd = float(charging.llm_charge) * _USD_PER_CREDIT
+
+    # Fallback when no usable charge breakdown was provided.
+    if call_usd == 0.0 and llm_usd == 0.0:
+        if total_credits:
+            call_usd = float(total_credits) * _USD_PER_CREDIT
         else:
+            call_usd = duration_minutes * settings.cost_per_call_minute_usd
             llm_usd = (
                 input_tokens / 1000.0 * _LLM_USD_PER_1K_INPUT
                 + output_tokens / 1000.0 * _LLM_USD_PER_1K_OUTPUT
             )
-
-    # Call charge: prefer explicit, else duration * configured per-minute rate.
-    if charging is not None and charging.call_charge is not None:
-        call_usd = float(charging.call_charge)
-    else:
-        call_usd = duration_minutes * settings.cost_per_call_minute_usd
 
     total_usd = round(call_usd + llm_usd + tts_usd + asr_usd, 6)
 
@@ -93,5 +109,5 @@ def compute_cost(metadata: MetadataModel) -> CostBreakdown:
         asr_usd=round(asr_usd, 6),
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        credits=metadata.cost,
+        credits=total_credits,
     )
