@@ -32,7 +32,10 @@ logger = logging.getLogger("observability.search")
 settings = get_settings()
 
 _EMBED_DIM = 1024
-_COLLECTION = "transcripts"
+# The embedder version is part of the collection name: changing the embedding
+# (e.g. dimensionality) automatically uses a fresh collection instead of clashing
+# with vectors written by an older embedder ("dimension X != collection Y").
+_COLLECTION = "transcripts_v2_1024"
 
 # Common words carry little signal; dropping them sharpens relevance.
 _STOPWORDS = frozenset(
