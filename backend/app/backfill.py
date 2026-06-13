@@ -18,19 +18,45 @@ from __future__ import annotations
 
 import argparse
 import logging
+import random
 
 import httpx
 
 from app.config import get_settings
 from app.database import SessionLocal, init_db
+from app.models import Conversation
 from app.schemas.elevenlabs import ConversationData
 from app.services import search
 from app.services.alerting import evaluate_conversation_alerts
-from app.services.ingest import ingest_conversation
+from app.services.ingest import ingest_conversation, recompute_conversation_pipeline
 
 logger = logging.getLogger("observability.backfill")
 
 API_BASE = "https://api.elevenlabs.io"
+
+
+def _attach_demo_pipeline(conv: Conversation, llm_vendor: str = "openai") -> None:
+    """Synthesize multi-vendor stages for a real call's agent turns.
+
+    ElevenLabs only reports its own (LLM/TTS) slice, so the true end-to-end
+    pipeline can't be derived from its data alone. For demos we approximate the
+    stages an orchestrator would report — reusing the *real* LLM TTFB so the
+    numbers stay consistent — and recompute E2E + bottleneck.
+    """
+    for turn in conv.turns:
+        if turn.role != "agent":
+            continue
+        llm_ms = round(float(turn.llm_ttfb_ms or random.uniform(300, 1400)), 1)
+        asr_ms = round(random.uniform(70, 180), 1)
+        tts_ms = round(random.uniform(150, 450), 1)
+        transport_ms = round(random.uniform(40, 120), 1)
+        turn.pipeline_stages = [
+            {"stage": "asr", "vendor": "deepgram", "duration_ms": asr_ms},
+            {"stage": "llm", "vendor": llm_vendor, "duration_ms": llm_ms},
+            {"stage": "tts", "vendor": "elevenlabs", "duration_ms": tts_ms},
+            {"stage": "transport", "vendor": "twilio", "duration_ms": transport_ms},
+        ]
+    recompute_conversation_pipeline(conv)
 
 
 def _client(api_key: str) -> httpx.Client:
@@ -79,8 +105,15 @@ def fetch_conversation(client: httpx.Client, conversation_id: str) -> dict:
     return resp.json()
 
 
-def backfill(*, agent_id: str | None = None, limit: int | None = None) -> int:
-    """Fetch and ingest real conversations. Returns the number ingested."""
+def backfill(
+    *, agent_id: str | None = None, limit: int | None = None, demo_pipeline: bool = False
+) -> int:
+    """Fetch and ingest real conversations. Returns the number ingested.
+
+    When ``demo_pipeline`` is set, multi-vendor pipeline stages are synthesized
+    for each call so the true-E2E / bottleneck dashboard works on real data
+    (ElevenLabs cannot supply ASR/transport timings itself).
+    """
     settings = get_settings()
     api_key = settings.elevenlabs_api_key.strip()
     if not api_key:
@@ -113,6 +146,8 @@ def backfill(*, agent_id: str | None = None, limit: int | None = None) -> int:
                     continue  # call without a transcript (e.g. failed/empty)
 
                 conv = ingest_conversation(db, data, source="backfill")
+                if demo_pipeline:
+                    _attach_demo_pipeline(conv)
                 evaluate_conversation_alerts(db, conv)
                 db.commit()
                 search.index_conversation_safe(conv.id, data)
@@ -128,8 +163,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill real ElevenLabs conversations.")
     parser.add_argument("--agent-id", default=None, help="restrict to one agent")
     parser.add_argument("--limit", type=int, default=None, help="most recent N conversations")
+    parser.add_argument(
+        "--demo-pipeline",
+        action="store_true",
+        help="synthesize multi-vendor pipeline stages so the E2E/bottleneck widgets work",
+    )
     args = parser.parse_args()
-    backfill(agent_id=args.agent_id, limit=args.limit)
+    backfill(agent_id=args.agent_id, limit=args.limit, demo_pipeline=args.demo_pipeline)
 
 
 if __name__ == "__main__":
