@@ -9,6 +9,7 @@ that any failure degrades to a no-op rather than breaking ingestion.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import os
@@ -30,17 +31,39 @@ logging.getLogger("chromadb.telemetry.product.posthog").setLevel(logging.CRITICA
 logger = logging.getLogger("observability.search")
 settings = get_settings()
 
-_EMBED_DIM = 512
+_EMBED_DIM = 1024
 _COLLECTION = "transcripts"
+
+# Common words carry little signal; dropping them sharpens relevance.
+_STOPWORDS = frozenset(
+    """a an and are as at be been but by do did for from had has have he her his i if in
+    is it its me my no not of on or our she so that the their them they this to up us was
+    we were what when where which who will with you your hi hello hey ok okay yeah yes please
+    thanks thank just like would could should can about""".split()
+)
+
+
+def _stable_hash(token: str) -> int:
+    """Process-independent hash (unlike Python's salted ``hash()``).
+
+    The previous implementation used the built-in ``hash()``, which is randomized
+    per process (PYTHONHASHSEED). That meant documents indexed in one process and
+    queries embedded in another landed in different hash spaces, making every
+    similarity ~0. Hashing with blake2b is deterministic across processes.
+    """
+    return int.from_bytes(hashlib.blake2b(token.encode(), digest_size=8).digest(), "big")
 
 
 def _hash_embed(text: str) -> list[float]:
-    """Bag-of-words hashing vectorizer, L2-normalized. Cheap and offline."""
+    """Deterministic bag-of-words hashing vectorizer, L2-normalized. Offline, no deps."""
     vec = [0.0] * _EMBED_DIM
-    for token in re.findall(r"[a-zA-Z']+", text.lower()):
-        idx = hash(token) % _EMBED_DIM
+    for token in re.findall(r"[a-z']{2,}", text.lower()):
+        if token in _STOPWORDS:
+            continue
+        h = _stable_hash(token)
+        idx = h % _EMBED_DIM
         # Sign hashing reduces collisions cancelling each other out.
-        sign = 1.0 if (hash(token + "_s") & 1) else -1.0
+        sign = 1.0 if (h >> 17) & 1 else -1.0
         vec[idx] += sign
     norm = math.sqrt(sum(v * v for v in vec)) or 1.0
     return [v / norm for v in vec]
@@ -54,7 +77,7 @@ class _HashEmbeddingFunction:
 
     @staticmethod
     def name() -> str:
-        return "hashing-vectorizer-v1"
+        return "hashing-vectorizer-v2"
 
 
 @lru_cache
