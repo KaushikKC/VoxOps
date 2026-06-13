@@ -38,3 +38,6 @@ frontend/.vite/
 .vscode/
 .claude/
 *.swp
+
+# ---- Local-only docs (not for publishing) ----
+DEMO_SCRIPT.md
