@@ -1,31 +1,45 @@
 // Semantic search across conversation transcripts.
+// Driven by the global top-bar search (?q=…); also has its own input.
 
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { api } from "../api/client";
 import type { SearchHit } from "../api/types";
 
 export function Search() {
   const navigate = useNavigate();
-  const [q, setQ] = useState("");
+  const [params, setParams] = useSearchParams();
+  const initial = params.get("q") ?? "";
+  const [q, setQ] = useState(initial);
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function run(e: React.FormEvent) {
-    e.preventDefault();
-    if (q.trim().length < 2) return;
+  const runQuery = useCallback(async (query: string) => {
+    if (query.trim().length < 2) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await api.search(q, 15);
+      const res = await api.search(query, 15);
       setHits(res.hits);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Re-run whenever the ?q= param changes (e.g. from the top-bar search).
+  useEffect(() => {
+    const urlQ = params.get("q") ?? "";
+    setQ(urlQ);
+    if (urlQ.trim().length >= 2) runQuery(urlQ);
+  }, [params, runQuery]);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (q.trim().length >= 2) setParams({ q: q.trim() });
   }
 
   return (
@@ -37,7 +51,7 @@ export function Search() {
         </div>
       </div>
 
-      <form className="toolbar" onSubmit={run}>
+      <form className="toolbar" onSubmit={onSubmit}>
         <input
           type="search"
           placeholder="Describe what you're looking for…"
@@ -76,7 +90,7 @@ export function Search() {
               {hits.length === 0 && (
                 <tr>
                   <td colSpan={3} className="empty">
-                    No matches. Try seeding data or a different query.
+                    No matches. Try a different query.
                   </td>
                 </tr>
               )}
