@@ -190,10 +190,13 @@ def _build_conversation(index: int, now: datetime, days: int) -> ConversationDat
             )
 
     duration = int(t + random.uniform(1, 3))
-    call_charge = round(duration / 60.0 * 0.08, 5)
-    llm_charge = round(
-        total_input_tokens / 1000 * 0.0005 + total_output_tokens / 1000 * 0.0015, 5
+    # ElevenLabs meters in credits (~5-7 credits/sec of call + LLM credits).
+    call_credits = int(duration * random.uniform(5.0, 7.0))
+    llm_price_usd = round(
+        total_input_tokens / 1000 * 0.0005 + total_output_tokens / 1000 * 0.0015, 6
     )
+    llm_credits = int(llm_price_usd / 0.0001)
+    total_credits = call_credits + llm_credits
 
     return ConversationData(
         agent_id=agent_id,
@@ -205,13 +208,15 @@ def _build_conversation(index: int, now: datetime, days: int) -> ConversationDat
         metadata=MetadataModel(
             start_time_unix_secs=start_unix,
             call_duration_secs=duration,
-            cost=int((call_charge + llm_charge) * 1000),
+            cost=total_credits,
             termination_reason="user_ended",
             main_language="en",
             conversation_initiation_source="simulator",
             charging=ChargingModel(
-                call_charge=call_charge,
-                llm_charge=llm_charge,
+                call_charge=call_credits,
+                llm_charge=llm_credits,
+                llm_price=llm_price_usd,
+                tier="free",
                 llm_usage={
                     "category": {
                         "input_tokens": total_input_tokens,
