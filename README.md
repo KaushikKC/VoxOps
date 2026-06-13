@@ -7,6 +7,9 @@
   <em>~4,300 lines of Python · ~1,600 lines of TypeScript · 51 automated tests · 92 commits</em>
 </p>
 
+
+**Watch the demo:** <https://youtu.be/y3tB9wgPS-o> 
+
 ---
 
 ## Table of contents
